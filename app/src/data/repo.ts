@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { Coordenadas } from '../lib/geo';
 import { formatarConteudo } from '../format';
+import { Oferta, vigente } from '../lib/oferta';
 import { PrecoUnitario, UnidadeBase } from '../lib/precoUnitario';
 import { DadosProduto, Loja, NovaLoja, OrigemPreco, Preco, Produto, UnidadeConteudo } from '../types';
 
@@ -179,7 +180,7 @@ export async function salvarProduto(produto: Omit<Produto, 'salvo'>): Promise<Pr
 export async function historicoPrecos(ean: string): Promise<Preco[]> {
   const { data, error } = await supabase
     .from('precos')
-    .select('id, ean, loja_id, valor, data_hora, origem, lojas(nome)')
+    .select('id, ean, loja_id, valor, data_hora, origem, promocional, valido_ate, leve, pague, lojas(nome)')
     .eq('ean', ean)
     .order('data_hora', { ascending: false })
     .limit(50);
@@ -192,17 +193,22 @@ export async function historicoPrecos(ean: string): Promise<Preco[]> {
     valor: Number(p.valor),
     dataHora: p.data_hora,
     origem: p.origem as OrigemPreco,
+    promocional: p.promocional,
+    validoAte: p.valido_ate ?? undefined,
+    leve: p.leve ?? undefined,
+    pague: p.pague !== null ? Number(p.pague) : undefined,
   }));
 }
 
 /**
  * Mais barato considerando só o preço mais recente de cada loja
  * (um preço antigo da mesma loja já foi substituído pelo atual).
+ * Promoção vencida não conta: naquela loja vale o preço anterior.
  */
-export function maisBarato(historico: Preco[]): Preco | undefined {
+export function maisBarato(historico: Preco[], dia?: string): Preco | undefined {
   const atualPorLoja = new Map<string, Preco>();
   for (const p of historico) {
-    if (!atualPorLoja.has(p.lojaId)) atualPorLoja.set(p.lojaId, p);
+    if (!atualPorLoja.has(p.lojaId) && vigente(p, dia)) atualPorLoja.set(p.lojaId, p);
   }
   let melhor: Preco | undefined;
   for (const p of atualPorLoja.values()) {
@@ -248,7 +254,16 @@ export async function alternativasPorUnidade(ean: string): Promise<Alternativa[]
   }));
 }
 
-export async function registrarPreco(ean: string, lojaId: string, valor: number): Promise<void> {
-  const { error } = await supabase.from('precos').insert({ ean, loja_id: lojaId, valor, origem: 'manual' });
+export async function registrarPreco(ean: string, lojaId: string, valor: number, oferta?: Oferta): Promise<void> {
+  const { error } = await supabase.from('precos').insert({
+    ean,
+    loja_id: lojaId,
+    valor,
+    origem: 'manual',
+    promocional: oferta?.promocional ?? false,
+    valido_ate: oferta?.validoAte ?? null,
+    leve: oferta?.leve ?? null,
+    pague: oferta?.pague ?? null,
+  });
   if (error) throw error;
 }

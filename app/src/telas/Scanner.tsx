@@ -26,6 +26,7 @@ import {
   registrarPreco,
   salvarProduto,
 } from '../data/repo';
+import { Oferta } from '../lib/oferta';
 import { supabase } from '../lib/supabase';
 import { cores } from '../tema';
 import { Preco, Produto } from '../types';
@@ -212,7 +213,7 @@ export function Scanner({ nomeUsuario, usuarioId }: { nomeUsuario: string; usuar
     if (depois === 'lista') colocarNaLista(produto);
   }
 
-  async function salvarPreco(dados: { lojaId: string; valor: number }) {
+  async function salvarPreco(dados: { lojaId: string; valor: number; oferta?: Oferta }) {
     if (!leitura?.produto) return;
     setSalvando(true);
     setErro(undefined);
@@ -222,7 +223,7 @@ export function Scanner({ nomeUsuario, usuarioId }: { nomeUsuario: string; usuar
         // veio do Open Food Facts: entra no banco junto com o primeiro preço
         produto = await salvarProduto({ ean: leitura.ean, descricao: produto.descricao, imagemUrl: produto.imagemUrl });
       }
-      await registrarPreco(leitura.ean, dados.lojaId, dados.valor);
+      await registrarPreco(leitura.ean, dados.lojaId, dados.valor, dados.oferta);
       const [historico, alternativas] = await Promise.all([
         historicoPrecos(leitura.ean),
         buscarAlternativas(leitura.ean),

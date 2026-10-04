@@ -1,3 +1,5 @@
+import { Oferta } from './lib/oferta';
+
 export type Loja = {
   id: string;
   nome: string;
@@ -52,4 +54,4 @@ export type Preco = {
   valor: number;
   dataHora: string; // ISO 8601
   origem: OrigemPreco;
-};
+} & Oferta;

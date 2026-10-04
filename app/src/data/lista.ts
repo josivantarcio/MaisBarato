@@ -186,7 +186,19 @@ export async function precosAtuais(eans: string[]): Promise<PrecoAtual[]> {
   if (precos.error) throw precos.error;
   if (produtos.error) throw produtos.error;
   const medida = new Map(produtos.data.map((p) => [p.ean, p]));
-  return (precos.data as { ean: string; loja_id: string; loja_nome: string; valor: number; data_hora: string }[]).map(
+  return (
+    precos.data as {
+      ean: string;
+      loja_id: string;
+      loja_nome: string;
+      valor: number;
+      data_hora: string;
+      promocional: boolean;
+      valido_ate: string | null;
+      leve: number | null;
+      pague: number | null;
+    }[]
+  ).map(
     (p) => ({
       ean: p.ean,
       lojaId: p.loja_id,
@@ -195,6 +207,10 @@ export async function precosAtuais(eans: string[]): Promise<PrecoAtual[]> {
       dataHora: p.data_hora,
       conteudo: medida.has(p.ean) ? Number(medida.get(p.ean)!.conteudo) : undefined,
       unidade: medida.get(p.ean)?.unidade ?? undefined,
+      promocional: p.promocional,
+      validoAte: p.valido_ate ?? undefined,
+      leve: p.leve ?? undefined,
+      pague: p.pague !== null ? Number(p.pague) : undefined,
     }),
   );
 }
