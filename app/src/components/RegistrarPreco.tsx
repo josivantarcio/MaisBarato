@@ -1,23 +1,32 @@
-import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { listarLojas } from '../data/repo';
 import { lerValor } from '../format';
 import { cores } from '../tema';
+import { Loja } from '../types';
 
 type Props = {
   pedirDescricao: boolean;
+  salvando: boolean;
   onSalvar: (dados: { lojaId: string; valor: number; descricao?: string }) => void;
   onCancelar: () => void;
 };
 
-export function RegistrarPreco({ pedirDescricao, onSalvar, onCancelar }: Props) {
-  const lojas = listarLojas();
+export function RegistrarPreco({ pedirDescricao, salvando, onSalvar, onCancelar }: Props) {
+  const [lojas, setLojas] = useState<Loja[]>();
+  const [erroLojas, setErroLojas] = useState<string>();
   const [lojaId, setLojaId] = useState<string>();
   const [valorTexto, setValorTexto] = useState('');
   const [descricao, setDescricao] = useState('');
 
   const valor = lerValor(valorTexto);
-  const podeSalvar = !!lojaId && !!valor && (!pedirDescricao || descricao.trim().length > 2);
+  const podeSalvar = !!lojaId && !!valor && (!pedirDescricao || descricao.trim().length > 2) && !salvando;
+
+  useEffect(() => {
+    listarLojas()
+      .then(setLojas)
+      .catch(() => setErroLojas('Não foi possível carregar as lojas.'));
+  }, []);
 
   return (
     <View>
@@ -33,7 +42,9 @@ export function RegistrarPreco({ pedirDescricao, onSalvar, onCancelar }: Props) 
       )}
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.lojas}>
-        {lojas.map((l) => (
+        {!lojas && !erroLojas && <ActivityIndicator color={cores.verde} />}
+        {erroLojas && <Text style={styles.erro}>{erroLojas}</Text>}
+        {lojas?.map((l) => (
           <Pressable
             key={l.id}
             onPress={() => setLojaId(l.id)}
@@ -60,7 +71,7 @@ export function RegistrarPreco({ pedirDescricao, onSalvar, onCancelar }: Props) 
           onPress={() => lojaId && valor && onSalvar({ lojaId, valor, descricao: descricao.trim() || undefined })}
           style={[styles.botao, !podeSalvar && styles.botaoDesativado]}
         >
-          <Text style={styles.botaoTexto}>Salvar</Text>
+          {salvando ? <ActivityIndicator color="#fff" /> : <Text style={styles.botaoTexto}>Salvar</Text>}
         </Pressable>
       </View>
     </View>
@@ -90,6 +101,7 @@ const styles = StyleSheet.create({
   chipTexto: { fontSize: 13, color: cores.texto },
   chipTextoAtivo: { color: '#fff', fontWeight: '600' },
   linha: { flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
+  erro: { color: '#c62828', fontSize: 13 },
   valor: { flex: 1, fontSize: 18, fontWeight: '700' },
   botao: { backgroundColor: cores.verde, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 11 },
   botaoDesativado: { opacity: 0.4 },

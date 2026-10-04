@@ -1,5 +1,5 @@
 import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { buscarLoja, maisBarato } from '../data/repo';
+import { maisBarato } from '../data/repo';
 import { brl, dataHora, ehAntigo, haQuantoTempo } from '../format';
 import { cores } from '../tema';
 import { Preco, Produto } from '../types';
@@ -12,7 +12,6 @@ type Props = {
 
 export function ProdutoPainel({ ean, produto, historico }: Props) {
   const melhor = maisBarato(historico);
-  const lojaMelhor = melhor && buscarLoja(melhor.lojaId);
 
   return (
     <View style={styles.linha}>
@@ -35,7 +34,7 @@ export function ProdutoPainel({ ean, produto, historico }: Props) {
             <Text style={styles.destaqueRotulo}>MAIS BARATO</Text>
             <Text style={styles.destaquePreco}>{brl(melhor.valor)}</Text>
             <Text style={styles.destaqueLoja} numberOfLines={2}>
-              {lojaMelhor?.nome}
+              {melhor.lojaNome}
             </Text>
             <Text style={styles.destaqueTempo}>{haQuantoTempo(melhor.dataHora)}</Text>
           </View>
@@ -49,14 +48,13 @@ export function ProdutoPainel({ ean, produto, historico }: Props) {
         <Text style={styles.titulo}>Histórico</Text>
         <ScrollView>
           {historico.map((p) => {
-            const loja = buscarLoja(p.lojaId);
             const ehMelhor = p.id === melhor?.id;
             const antigo = ehAntigo(p.dataHora);
             return (
               <View key={p.id} style={[styles.item, ehMelhor && styles.itemMelhor, antigo && styles.itemAntigo]}>
                 <View style={styles.itemTopo}>
                   <Text style={styles.itemLoja} numberOfLines={1}>
-                    {loja?.nome ?? '?'}
+                    {p.lojaNome}
                   </Text>
                   <Text style={[styles.itemPreco, ehMelhor && styles.itemPrecoMelhor]}>{brl(p.valor)}</Text>
                 </View>
