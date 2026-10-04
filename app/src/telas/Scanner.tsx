@@ -12,9 +12,11 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { NotaPainel } from '../components/NotaPainel';
 import { ProdutoPainel } from '../components/ProdutoPainel';
 import { RegistrarPreco } from '../components/RegistrarPreco';
 import { adicionarNaListaAtual } from '../data/lista';
+import { ErroNfce, importarNfce, ItemNota, NotaImportada, pareceQrNfce, vincularItemNota } from '../data/nfce';
 import { buscarProduto, historicoPrecos, registrarPreco, salvarProduto } from '../data/repo';
 import { supabase } from '../lib/supabase';
 import { cores } from '../tema';
@@ -40,6 +42,9 @@ export function Scanner({ nomeUsuario }: { nomeUsuario: string }) {
   const [erro, setErro] = useState<string>();
   const [digitado, setDigitado] = useState('');
   const [naLista, setNaLista] = useState<'adicionando' | 'ok'>();
+  const [nota, setNota] = useState<NotaImportada>();
+  const [vinculando, setVinculando] = useState<ItemNota>();
+  const [mensagemCarregando, setMensagemCarregando] = useState<string>();
   // Evita processar o mesmo código várias vezes enquanto a câmera continua vendo.
   const travado = useRef(false);
 
@@ -60,8 +65,80 @@ export function Scanner({ nomeUsuario }: { nomeUsuario: string }) {
     }
   }
 
+  /** Libera a câmera depois de um tempo, para o mesmo código não disparar de novo na hora. */
+  function liberarDepois(ms = 2500) {
+    setTimeout(() => {
+      travado.current = false;
+    }, ms);
+  }
+
+  async function importarNota(qr: string) {
+    travado.current = true;
+    setCarregando(true);
+    setMensagemCarregando('Consultando o cupom na SEFAZ…');
+    setErro(undefined);
+    try {
+      setNota(await importarNfce(qr));
+      travado.current = false;
+    } catch (e) {
+      setErro(e instanceof ErroNfce ? e.message : mensagemDeErro(e));
+      liberarDepois();
+    } finally {
+      setCarregando(false);
+      setMensagemCarregando(undefined);
+    }
+  }
+
+  async function vincular(item: ItemNota, ean: string) {
+    travado.current = true;
+    setCarregando(true);
+    setMensagemCarregando('Registrando o preço do cupom…');
+    setErro(undefined);
+    try {
+      // Usa a descrição do produto (banco ou Open Food Facts), que costuma ser melhor que a do cupom
+      const produto = await buscarProduto(ean).catch(() => undefined);
+      await vincularItemNota(item.id, ean, produto?.descricao);
+      setNota((atual) =>
+        atual && {
+          ...atual,
+          itens: atual.itens.map((i) => (i.id === item.id ? { ...i, ean, precoRegistrado: true } : i)),
+        },
+      );
+      setVinculando(undefined);
+      travado.current = false;
+    } catch (e) {
+      setErro(e instanceof ErroNfce ? e.message : mensagemDeErro(e));
+      liberarDepois();
+    } finally {
+      setCarregando(false);
+      setMensagemCarregando(undefined);
+    }
+  }
+
   function aoLerCodigo({ data }: BarcodeScanningResult) {
+    if (travado.current) return;
+    if (vinculando) {
+      if (/^\d{8,14}$/.test(data)) vincular(vinculando, data);
+      return;
+    }
+    if (pareceQrNfce(data)) {
+      importarNota(data);
+      return;
+    }
+    if (!/^\d{8,14}$/.test(data)) {
+      travado.current = true;
+      setErro('Este QR Code não é de um cupom fiscal (NFC-e).');
+      liberarDepois();
+      return;
+    }
     abrirProduto(data);
+  }
+
+  function fecharNota() {
+    setNota(undefined);
+    setVinculando(undefined);
+    setErro(undefined);
+    travado.current = false;
   }
 
   function escanearOutro() {
@@ -135,12 +212,14 @@ export function Scanner({ nomeUsuario }: { nomeUsuario: string }) {
   return (
     <SafeAreaView style={styles.tela} edges={['top']}>
       <StatusBar style="light" />
-      <View style={[styles.cameraArea, registrando && styles.cameraCompacta]}>
+      <View style={[styles.cameraArea, (registrando || (nota && !vinculando)) && styles.cameraCompacta]}>
         <CameraView
           style={StyleSheet.absoluteFill}
           facing="back"
-          barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e'] }}
-          onBarcodeScanned={leitura || carregando ? undefined : aoLerCodigo}
+          barcodeScannerSettings={{
+            barcodeTypes: vinculando ? ['ean13', 'ean8', 'upc_a', 'upc_e'] : ['ean13', 'ean8', 'upc_a', 'upc_e', 'qr'],
+          }}
+          onBarcodeScanned={leitura || carregando || (nota && !vinculando) ? undefined : aoLerCodigo}
         />
         <View style={styles.mira} pointerEvents="none" />
         <View style={styles.topo}>
@@ -156,7 +235,23 @@ export function Scanner({ nomeUsuario }: { nomeUsuario: string }) {
       <KeyboardAvoidingView style={styles.painel} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {erro && <Text style={styles.erro}>{erro}</Text>}
         {carregando ? (
-          <ActivityIndicator size="large" color={cores.verde} style={{ marginTop: 24 }} />
+          <View style={{ alignItems: 'center', marginTop: 24, gap: 8 }}>
+            <ActivityIndicator size="large" color={cores.verde} />
+            {mensagemCarregando && <Text style={styles.dicaPequena}>{mensagemCarregando}</Text>}
+          </View>
+        ) : vinculando ? (
+          <View>
+            <Text style={styles.dica}>Escaneie o código de barras de:</Text>
+            <Text style={styles.vinculandoNome}>{vinculando.descricao}</Text>
+            <Text style={styles.dicaPequena}>
+              Assim o preço do cupom fica registrado, e as próximas notas deste mercado já reconhecem o produto.
+            </Text>
+            <Pressable style={[styles.botao, styles.botaoSecundario, { marginTop: 10 }]} onPress={() => setVinculando(undefined)}>
+              <Text style={styles.botaoSecundarioTexto}>Cancelar</Text>
+            </Pressable>
+          </View>
+        ) : nota ? (
+          <NotaPainel nota={nota} onVincular={setVinculando} onFechar={fecharNota} />
         ) : leitura ? (
           registrando ? (
             <RegistrarPreco
@@ -192,6 +287,9 @@ export function Scanner({ nomeUsuario }: { nomeUsuario: string }) {
         ) : (
           <View>
             <Text style={styles.dica}>Aponte a câmera para o código de barras do produto.</Text>
+            <Text style={styles.dicaPequena}>
+              Tem um cupom fiscal? Escaneie o QR Code dele para registrar todos os preços da compra de uma vez.
+            </Text>
             <Text style={styles.dicaPequena}>Ou digite o código:</Text>
             <View style={styles.acoes}>
               <TextInput
@@ -253,6 +351,7 @@ const styles = StyleSheet.create({
   },
   erro: { color: '#c62828', fontSize: 14, marginBottom: 8 },
   dica: { fontSize: 16, fontWeight: '600', color: cores.texto, marginBottom: 12 },
+  vinculandoNome: { fontSize: 17, fontWeight: '800', color: cores.texto, marginBottom: 6 },
   dicaPequena: { fontSize: 13, color: cores.cinza, marginBottom: 6 },
   acoes: { flexDirection: 'row', gap: 8, marginTop: 10 },
   input: {
