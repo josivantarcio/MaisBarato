@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ProdutoPainel } from '../components/ProdutoPainel';
 import { RegistrarPreco } from '../components/RegistrarPreco';
-import { adicionarNaMinhaLista } from '../data/lista';
+import { adicionarNaListaAtual } from '../data/lista';
 import { buscarProduto, historicoPrecos, registrarPreco, salvarProduto } from '../data/repo';
 import { supabase } from '../lib/supabase';
 import { cores } from '../tema';
@@ -87,7 +87,7 @@ export function Scanner({ nomeUsuario }: { nomeUsuario: string }) {
         });
         setLeitura({ ...leitura, produto });
       }
-      await adicionarNaMinhaLista({ ean: leitura.ean, descricao: produto.descricao });
+      await adicionarNaListaAtual({ ean: leitura.ean, descricao: produto.descricao });
       setNaLista('ok');
     } catch (e) {
       setErro(mensagemDeErro(e));

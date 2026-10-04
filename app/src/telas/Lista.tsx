@@ -11,13 +11,20 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { Compartilhar } from '../components/Compartilhar';
 import {
+  acompanharLista,
   adicionarItem,
   atualizarItem,
   buscarProdutosPorNome,
+  guardarListaAtual,
+  InfoLista,
   ItemLista,
+  lerListaAtual,
   listarItens,
-  obterListaPadrao,
+  listarMembros,
+  listarMinhasListas,
+  Membro,
   precosAtuais,
   removerItem,
   removerMarcados,
@@ -27,15 +34,22 @@ import { brl } from '../format';
 import { compararLista, PrecoAtual } from '../lib/comparacao';
 import { cores } from '../tema';
 
-async function buscarListaComPrecos() {
-  const id = await obterListaPadrao();
-  const lista = await listarItens(id);
-  const eans = [...new Set(lista.map((i) => i.ean).filter((e): e is string => !!e))];
-  return { id, lista, precos: await precosAtuais(eans) };
+/** Carrega as listas do usuário e a escolhida (ou a última aberta, ou a própria). */
+async function buscarListaComPrecos(preferida?: string) {
+  const listas = await listarMinhasListas();
+  const guardada = preferida ?? (await lerListaAtual());
+  const escolhida = listas.find((l) => l.id === guardada) ?? listas[0];
+  const [itens, membros] = await Promise.all([listarItens(escolhida.id), listarMembros(escolhida.id)]);
+  const eans = [...new Set(itens.map((i) => i.ean).filter((e): e is string => !!e))];
+  await guardarListaAtual(escolhida.id);
+  return { listas, escolhida, itens, membros, precos: await precosAtuais(eans) };
 }
 
 export function Lista() {
+  const [listas, setListas] = useState<InfoLista[]>([]);
   const [listaId, setListaId] = useState<string>();
+  const [membros, setMembros] = useState<Membro[]>([]);
+  const [compartilhando, setCompartilhando] = useState(false);
   const [itens, setItens] = useState<ItemLista[]>();
   const [precos, setPrecos] = useState<PrecoAtual[]>([]);
   const [atualizando, setAtualizando] = useState(false);
@@ -44,12 +58,14 @@ export function Lista() {
   const [sugestoes, setSugestoes] = useState<SugestaoProduto[]>([]);
 
   const carregar = useCallback(
-    () =>
-      buscarListaComPrecos()
-        .then(({ id, lista, precos: atuais }) => {
-          setListaId(id);
-          setItens(lista);
-          setPrecos(atuais);
+    (preferida?: string) =>
+      buscarListaComPrecos(preferida)
+        .then((r) => {
+          setListas(r.listas);
+          setListaId(r.escolhida.id);
+          setMembros(r.membros);
+          setItens(r.itens);
+          setPrecos(r.precos);
           setErro(undefined);
         })
         .catch(() => {
@@ -62,6 +78,20 @@ export function Lista() {
   useEffect(() => {
     carregar();
   }, [carregar]);
+
+  // Tempo real: quando outra pessoa mexe na lista, recarrega (agrupando mudanças seguidas).
+  useEffect(() => {
+    if (!listaId) return;
+    let espera: ReturnType<typeof setTimeout> | undefined;
+    const parar = acompanharLista(listaId, () => {
+      clearTimeout(espera);
+      espera = setTimeout(() => carregar(listaId), 400);
+    });
+    return () => {
+      clearTimeout(espera);
+      parar();
+    };
+  }, [listaId, carregar]);
 
   // Sugere produtos já cadastrados enquanto digita (com uma pequena espera).
   useEffect(() => {
@@ -152,15 +182,60 @@ export function Lista() {
 
   const melhorLoja = comparacao.totaisPorLoja[0];
   const textoDigitado = texto.trim();
+  const listaAtual = listas.find((l) => l.id === listaId);
+  const compartilhada = !!listaAtual && (!listaAtual.souDono || membros.length > 0);
+
+  if (compartilhando && listaAtual) {
+    return (
+      <View style={styles.tela}>
+        <Compartilhar
+          lista={listaAtual}
+          membros={membros}
+          onVoltar={() => setCompartilhando(false)}
+          onMudou={(abrir) => {
+            // '' = saiu da lista compartilhada: volta para a própria
+            if (abrir !== undefined) setCompartilhando(false);
+            carregar(abrir === '' ? listas.find((l) => l.souDono)?.id : (abrir ?? listaId));
+          }}
+        />
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView style={styles.tela} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={styles.cabecalho}>
-        <Text style={styles.titulo}>Minha lista</Text>
-        <Text style={styles.contagem}>
-          {pendentes} {pendentes === 1 ? 'item' : 'itens'} para comprar
-        </Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.titulo} numberOfLines={1}>
+            {listaAtual && !listaAtual.souDono ? `Lista de ${listaAtual.donoNome}` : (listaAtual?.nome ?? 'Minha lista')}
+          </Text>
+          <Text style={styles.contagem}>
+            {pendentes} {pendentes === 1 ? 'item' : 'itens'} para comprar
+            {compartilhada ? ` · ${membros.length + 1} pessoas` : ''}
+          </Text>
+        </View>
+        <Pressable style={styles.botaoCompartilhar} onPress={() => setCompartilhando(true)} disabled={!listaAtual}>
+          <Text style={styles.botaoCompartilharTexto}>{compartilhada ? '👥 Pessoas' : '👥 Compartilhar'}</Text>
+        </Pressable>
       </View>
+
+      {listas.length > 1 && (
+        <View style={styles.seletor}>
+          {listas.map((l) => (
+            <Pressable
+              key={l.id}
+              style={[styles.chip, l.id === listaId && styles.chipAtivo]}
+              onPress={() => l.id !== listaId && carregar(l.id)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: l.id === listaId }}
+            >
+              <Text style={[styles.chipTexto, l.id === listaId && styles.chipTextoAtivo]} numberOfLines={1}>
+                {l.souDono ? l.nome : `de ${l.donoNome}`}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
 
       <View style={styles.adicionar}>
         <TextInput
@@ -251,6 +326,9 @@ export function Lista() {
                   <Text style={[styles.itemNome, item.marcado && styles.riscado]} numberOfLines={2}>
                     {item.descricao}
                   </Text>
+                  {compartilhada && item.adicionadoPor && (
+                    <Text style={styles.autor}>por {item.adicionadoPor}</Text>
+                  )}
                   {!item.marcado &&
                     (melhor ? (
                       <Text style={styles.itemPreco} numberOfLines={1}>
@@ -303,7 +381,15 @@ export function Lista() {
 const styles = StyleSheet.create({
   tela: { flex: 1, backgroundColor: cores.fundo, paddingHorizontal: 16 },
   centro: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: cores.fundo },
-  cabecalho: { paddingTop: 12, paddingBottom: 8 },
+  cabecalho: { paddingTop: 12, paddingBottom: 8, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  botaoCompartilhar: { backgroundColor: cores.cinzaClaro, borderRadius: 18, paddingHorizontal: 12, paddingVertical: 8 },
+  botaoCompartilharTexto: { color: cores.texto, fontWeight: '700', fontSize: 13 },
+  seletor: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
+  chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, backgroundColor: cores.cinzaClaro, maxWidth: 180 },
+  chipAtivo: { backgroundColor: cores.verde },
+  chipTexto: { fontSize: 13, color: cores.texto },
+  chipTextoAtivo: { color: '#fff', fontWeight: '700' },
+  autor: { fontSize: 11, color: cores.cinza, marginTop: 1 },
   titulo: { fontSize: 24, fontWeight: '800', color: cores.texto },
   contagem: { fontSize: 13, color: cores.cinza },
   adicionar: { flexDirection: 'row', gap: 8 },

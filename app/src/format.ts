@@ -36,3 +36,13 @@ const SETE_DIAS = 7 * 24 * 3600_000;
 export function ehAntigo(iso: string): boolean {
   return Date.now() - new Date(iso).getTime() > SETE_DIAS;
 }
+
+export function jaPassou(iso: string): boolean {
+  return new Date(iso).getTime() <= Date.now();
+}
+
+/** "12/10" */
+export function dataCurta(iso: string): string {
+  const d = new Date(iso);
+  return `${dois(d.getDate())}/${dois(d.getMonth() + 1)}`;
+}
