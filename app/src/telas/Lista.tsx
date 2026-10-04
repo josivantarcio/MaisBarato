@@ -32,6 +32,7 @@ import {
 } from '../data/lista';
 import { brl } from '../format';
 import { compararLista, PrecoAtual } from '../lib/comparacao';
+import { formatarPrecoUnitario, mostrarPorUnidade, precoUnitario } from '../lib/precoUnitario';
 import { cores } from '../tema';
 
 /** Carrega as listas do usuário e a escolhida (ou a última aberta, ou a própria). */
@@ -309,6 +310,7 @@ export function Lista() {
         }
         renderItem={({ item }) => {
           const melhor = item.ean ? comparacao.melhorPorEan.get(item.ean) : undefined;
+          const porUnidade = melhor && precoUnitario(melhor.valor, melhor.conteudo, melhor.unidade);
           return (
             <View style={[styles.item, item.marcado && styles.itemMarcado]}>
               <Pressable
@@ -333,6 +335,9 @@ export function Lista() {
                     (melhor ? (
                       <Text style={styles.itemPreco} numberOfLines={1}>
                         {brl(melhor.valor)} · {melhor.lojaNome}
+                        {porUnidade && mostrarPorUnidade(melhor.conteudo, melhor.unidade)
+                          ? ` · ${formatarPrecoUnitario(porUnidade)}`
+                          : ''}
                       </Text>
                     ) : (
                       <Text style={styles.itemSemPreco}>

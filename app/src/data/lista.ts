@@ -179,10 +179,23 @@ export async function buscarProdutosPorNome(texto: string): Promise<SugestaoProd
 
 export async function precosAtuais(eans: string[]): Promise<PrecoAtual[]> {
   if (eans.length === 0) return [];
-  const { data, error } = await supabase.rpc('precos_atuais', { p_eans: eans });
-  if (error) throw error;
-  return (data as { ean: string; loja_id: string; loja_nome: string; valor: number; data_hora: string }[]).map(
-    (p) => ({ ean: p.ean, lojaId: p.loja_id, lojaNome: p.loja_nome, valor: Number(p.valor), dataHora: p.data_hora }),
+  const [precos, produtos] = await Promise.all([
+    supabase.rpc('precos_atuais', { p_eans: eans }),
+    supabase.from('produtos').select('ean, conteudo, unidade').in('ean', eans).not('conteudo', 'is', null),
+  ]);
+  if (precos.error) throw precos.error;
+  if (produtos.error) throw produtos.error;
+  const medida = new Map(produtos.data.map((p) => [p.ean, p]));
+  return (precos.data as { ean: string; loja_id: string; loja_nome: string; valor: number; data_hora: string }[]).map(
+    (p) => ({
+      ean: p.ean,
+      lojaId: p.loja_id,
+      lojaNome: p.loja_nome,
+      valor: Number(p.valor),
+      dataHora: p.data_hora,
+      conteudo: medida.has(p.ean) ? Number(medida.get(p.ean)!.conteudo) : undefined,
+      unidade: medida.get(p.ean)?.unidade ?? undefined,
+    }),
   );
 }
 
