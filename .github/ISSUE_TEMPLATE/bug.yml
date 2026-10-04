@@ -1,0 +1,31 @@
+name: Problema (bug)
+description: Algo não funciona como deveria
+labels: [bug]
+body:
+  - type: textarea
+    id: o-que
+    attributes:
+      label: O que aconteceu?
+      description: E o que você esperava que acontecesse.
+    validations:
+      required: true
+  - type: textarea
+    id: passos
+    attributes:
+      label: Como reproduzir
+      placeholder: |
+        1. Escaneie o produto 7890000000011
+        2. Toque em "+ Preço"
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: aparelho
+    attributes:
+      label: Aparelho e sistema
+      placeholder: Android 15, Expo Go 57
+  - type: textarea
+    id: extra
+    attributes:
+      label: Prints ou logs
+      description: Não inclua dados pessoais, senhas nem chaves.

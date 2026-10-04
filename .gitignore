@@ -6,3 +6,8 @@ dist/
 *.log
 .DS_Store
 !.env.example
+
+# Anotações privadas do projeto (ficam no repositório privado, nunca aqui)
+privado/
+DIARIO_DE_BORDO.md
+MEMORY.md
