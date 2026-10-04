@@ -9,6 +9,11 @@ export type PrecoAtual = {
   /** conteúdo da embalagem, para o preço por kg/L */
   conteudo?: number;
   unidade?: string;
+  /** promoção/oferta (só vêm as vigentes) */
+  promocional?: boolean;
+  validoAte?: string;
+  leve?: number;
+  pague?: number;
 };
 
 export type ItemComparavel = {

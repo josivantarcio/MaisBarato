@@ -32,6 +32,7 @@ import {
 } from '../data/lista';
 import { brl } from '../format';
 import { compararLista, PrecoAtual } from '../lib/comparacao';
+import { seloOferta } from '../lib/oferta';
 import { formatarPrecoUnitario, mostrarPorUnidade, precoUnitario } from '../lib/precoUnitario';
 import { cores } from '../tema';
 
@@ -311,6 +312,7 @@ export function Lista() {
         renderItem={({ item }) => {
           const melhor = item.ean ? comparacao.melhorPorEan.get(item.ean) : undefined;
           const porUnidade = melhor && precoUnitario(melhor.valor, melhor.conteudo, melhor.unidade);
+          const selo = melhor && seloOferta(melhor.valor, { promocional: false, ...melhor });
           return (
             <View style={[styles.item, item.marcado && styles.itemMarcado]}>
               <Pressable
@@ -333,12 +335,19 @@ export function Lista() {
                   )}
                   {!item.marcado &&
                     (melhor ? (
-                      <Text style={styles.itemPreco} numberOfLines={1}>
-                        {brl(melhor.valor)} · {melhor.lojaNome}
-                        {porUnidade && mostrarPorUnidade(melhor.conteudo, melhor.unidade)
-                          ? ` · ${formatarPrecoUnitario(porUnidade)}`
-                          : ''}
-                      </Text>
+                      <>
+                        <Text style={styles.itemPreco} numberOfLines={1}>
+                          {brl(melhor.valor)} · {melhor.lojaNome}
+                          {porUnidade && mostrarPorUnidade(melhor.conteudo, melhor.unidade)
+                            ? ` · ${formatarPrecoUnitario(porUnidade)}`
+                            : ''}
+                        </Text>
+                        {selo && (
+                          <Text style={styles.itemOferta} numberOfLines={1}>
+                            {selo}
+                          </Text>
+                        )}
+                      </>
                     ) : (
                       <Text style={styles.itemSemPreco}>
                         {item.ean ? 'Sem preço registrado ainda' : 'Sem código: escaneie para comparar'}
@@ -447,6 +456,7 @@ const styles = StyleSheet.create({
   riscado: { textDecorationLine: 'line-through', color: cores.cinza },
   itemPreco: { fontSize: 12, color: cores.verde, fontWeight: '700', marginTop: 2 },
   itemSemPreco: { fontSize: 12, color: cores.cinza, marginTop: 2 },
+  itemOferta: { fontSize: 12, color: '#b45309', fontWeight: '700' },
   quantidade: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   qtdBotao: {
     width: 30,

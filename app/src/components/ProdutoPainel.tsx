@@ -1,6 +1,7 @@
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Alternativa, maisBarato } from '../data/repo';
 import { brl, dataHora, ehAntigo, haQuantoTempo } from '../format';
+import { seloOferta, vigente } from '../lib/oferta';
 import { compensa, formatarPrecoUnitario, mostrarPorUnidade, precoUnitario } from '../lib/precoUnitario';
 import { cores } from '../tema';
 import { Preco, Produto } from '../types';
@@ -28,6 +29,7 @@ export function ProdutoPainel({
   onAbrirProduto,
 }: Props) {
   const melhor = maisBarato(historico);
+  const seloMelhor = melhor && seloOferta(melhor.valor, melhor);
   const porUnidade = melhor ? precoUnitario(melhor.valor, produto?.conteudo, produto?.unidade) : undefined;
   // a lista vem ordenada por preço por unidade: a primeira de outro código é a melhor alternativa
   const outra = alternativas.find((a) => a.ean !== ean);
@@ -71,6 +73,7 @@ export function ProdutoPainel({
                 {melhor.lojaNome}
               </Text>
               <Text style={styles.destaqueTempo}>{haQuantoTempo(melhor.dataHora)}</Text>
+            {seloMelhor && <Text style={styles.destaqueOferta}>{seloMelhor}</Text>}
             </View>
           ) : (
             <Text style={styles.vazio}>Nenhum preço ainda. Seja o primeiro!</Text>
@@ -83,7 +86,9 @@ export function ProdutoPainel({
           <ScrollView>
             {historico.map((p) => {
               const ehMelhor = p.id === melhor?.id;
-              const antigo = ehAntigo(p.dataHora);
+              // promoção vencida aparece apagada, como preço antigo
+              const antigo = ehAntigo(p.dataHora) || !vigente(p);
+              const selo = seloOferta(p.valor, p);
               return (
                 <View key={p.id} style={[styles.item, ehMelhor && styles.itemMelhor, antigo && styles.itemAntigo]}>
                   <View style={styles.itemTopo}>
@@ -96,6 +101,7 @@ export function ProdutoPainel({
                     {dataHora(p.dataHora)}
                     {p.origem === 'nfce' ? '  · cupom fiscal' : ''}
                   </Text>
+                  {selo && <Text style={styles.itemOferta}>{selo}</Text>}
                 </View>
               );
             })}
@@ -148,6 +154,7 @@ const styles = StyleSheet.create({
   destaqueUnidade: { color: '#fff', fontSize: 12, fontWeight: '700', marginTop: -2 },
   destaqueLoja: { color: '#fff', fontSize: 12, fontWeight: '600' },
   destaqueTempo: { color: '#e6ffe9', fontSize: 11 },
+  destaqueOferta: { color: '#fff', fontSize: 11, fontWeight: '700', marginTop: 4 },
   vazio: { marginTop: 8, color: cores.cinza, fontSize: 13 },
   titulo: { fontSize: 13, fontWeight: '700', color: cores.texto, marginBottom: 4 },
   item: {
@@ -164,6 +171,7 @@ const styles = StyleSheet.create({
   itemPreco: { fontSize: 13, fontWeight: '700', color: cores.texto },
   itemPrecoMelhor: { color: cores.verde },
   itemData: { fontSize: 11, color: cores.cinza },
+  itemOferta: { fontSize: 11, color: '#b45309', fontWeight: '700' },
   dica: { backgroundColor: '#fff8e1', borderRadius: 10, padding: 8, borderWidth: 1, borderColor: '#ffe082' },
   dicaTitulo: { fontSize: 13, fontWeight: '700', color: cores.texto },
   dicaTexto: { fontSize: 12, color: cores.texto, marginTop: 2 },
