@@ -30,6 +30,13 @@
           "cameraPermission": "O MaisBarato usa a câmera para ler o código de barras dos produtos.",
           "recordAudioAndroid": false
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "O MaisBarato usa sua localização para mostrar os mercados perto de você e saber em qual loja você está registrando o preço.",
+          "isAndroidBackgroundLocationEnabled": false
+        }
       ]
     ]
   }

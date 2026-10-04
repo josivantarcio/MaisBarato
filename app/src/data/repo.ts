@@ -1,10 +1,59 @@
 import { supabase } from '../lib/supabase';
-import { Loja, OrigemPreco, Preco, Produto } from '../types';
+import { Coordenadas } from '../lib/geo';
+import { Loja, NovaLoja, OrigemPreco, Preco, Produto } from '../types';
 
 // Camada de acesso a dados: Supabase + Open Food Facts como fonte extra de produtos.
 
+/** Todas as lojas por nome. Usado quando não temos a localização do usuário. */
 export async function listarLojas(): Promise<Loja[]> {
-  const { data, error } = await supabase.from('lojas').select('id, nome, bairro').order('nome');
+  const { data, error } = await supabase.from('lojas').select('id, nome, bairro, endereco').order('nome').limit(100);
+  if (error) throw error;
+  return data;
+}
+
+/** Lojas cadastradas num raio da posição, da mais perto para a mais longe. */
+export async function lojasProximas(pos: Coordenadas, raioM = 5000): Promise<Loja[]> {
+  const { data, error } = await supabase.rpc('lojas_proximas', {
+    p_lat: pos.latitude,
+    p_lng: pos.longitude,
+    p_raio_m: raioM,
+  });
+  if (error) throw error;
+  return (data as (Loja & { distancia_m: number })[]).map((l) => ({
+    id: l.id,
+    nome: l.nome,
+    bairro: l.bairro,
+    endereco: l.endereco,
+    distanciaM: l.distancia_m,
+  }));
+}
+
+/**
+ * Cadastra uma loja. Se ela veio do OpenStreetMap e alguém já cadastrou,
+ * devolve a existente em vez de duplicar.
+ */
+export async function cadastrarLoja(nova: NovaLoja): Promise<Loja> {
+  if (nova.osmId) {
+    const { data: existente, error } = await supabase
+      .from('lojas')
+      .select('id, nome, bairro, endereco')
+      .eq('osm_id', nova.osmId)
+      .maybeSingle();
+    if (error) throw error;
+    if (existente) return existente;
+  }
+  const { data, error } = await supabase
+    .from('lojas')
+    .insert({
+      nome: nova.nome,
+      bairro: nova.bairro ?? null,
+      endereco: nova.endereco ?? null,
+      latitude: nova.latitude,
+      longitude: nova.longitude,
+      osm_id: nova.osmId ?? null,
+    })
+    .select('id, nome, bairro, endereco')
+    .single();
   if (error) throw error;
   return data;
 }

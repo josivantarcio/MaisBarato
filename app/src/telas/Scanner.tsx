@@ -109,7 +109,7 @@ export function Scanner({ nomeUsuario }: { nomeUsuario: string }) {
   return (
     <SafeAreaView style={styles.tela} edges={['top', 'bottom']}>
       <StatusBar style="light" />
-      <View style={styles.cameraArea}>
+      <View style={[styles.cameraArea, registrando && styles.cameraCompacta]}>
         <CameraView
           style={StyleSheet.absoluteFill}
           facing="back"
@@ -185,6 +185,8 @@ const styles = StyleSheet.create({
   marca: { fontSize: 28, fontWeight: '800', color: cores.verde, marginBottom: 12 },
   textoPermissao: { fontSize: 16, textAlign: 'center', color: cores.texto, marginBottom: 20 },
   cameraArea: { flex: 1, minHeight: 220, alignItems: 'center', justifyContent: 'center' },
+  // Com o formulário aberto, a câmera encolhe para sobrar espaço para a lista de lojas.
+  cameraCompacta: { flex: 0, minHeight: 0, height: 110 },
   mira: {
     width: '75%',
     height: 120,

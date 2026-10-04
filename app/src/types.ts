@@ -2,6 +2,18 @@ export type Loja = {
   id: string;
   nome: string;
   bairro: string | null;
+  endereco: string | null;
+  /** distância até o usuário, quando a posição é conhecida */
+  distanciaM?: number;
+};
+
+export type NovaLoja = {
+  nome: string;
+  bairro?: string;
+  endereco?: string;
+  latitude: number;
+  longitude: number;
+  osmId?: string;
 };
 
 export type Produto = {
