@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { Coordenadas } from '../lib/geo';
 import { formatarConteudo } from '../format';
+import { PrecoUnitario, UnidadeBase } from '../lib/precoUnitario';
 import { DadosProduto, Loja, NovaLoja, OrigemPreco, Preco, Produto, UnidadeConteudo } from '../types';
 
 // Camada de acesso a dados: Supabase + Open Food Facts como fonte extra de produtos.
@@ -208,6 +209,43 @@ export function maisBarato(historico: Preco[]): Preco | undefined {
     if (!melhor || p.valor < melhor.valor) melhor = p;
   }
   return melhor;
+}
+
+/** Embalagem parecida (nome semelhante, mesma família kg/L/un) com o menor preço atual. */
+export type Alternativa = {
+  ean: string;
+  descricao: string;
+  valor: number;
+  lojaNome: string;
+  dataHora: string;
+  precoUnitario: PrecoUnitario;
+};
+
+/**
+ * Produtos parecidos com o menor preço dos últimos 60 dias, do menor para o maior preço por kg|L|un.
+ * Inclui o próprio produto. Lista vazia se o produto não tem conteúdo cadastrado.
+ */
+export async function alternativasPorUnidade(ean: string): Promise<Alternativa[]> {
+  const { data, error } = await supabase.rpc('alternativas_por_unidade', { p_ean: ean });
+  if (error) throw error;
+  return (
+    data as {
+      ean: string;
+      descricao: string;
+      valor: number;
+      loja_nome: string;
+      data_hora: string;
+      preco_unitario: number;
+      unidade_base: UnidadeBase;
+    }[]
+  ).map((a) => ({
+    ean: a.ean,
+    descricao: a.descricao,
+    valor: Number(a.valor),
+    lojaNome: a.loja_nome,
+    dataHora: a.data_hora,
+    precoUnitario: { valor: Number(a.preco_unitario), base: a.unidade_base },
+  }));
 }
 
 export async function registrarPreco(ean: string, lojaId: string, valor: number): Promise<void> {

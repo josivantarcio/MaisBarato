@@ -6,6 +6,9 @@ export type PrecoAtual = {
   lojaNome: string;
   valor: number;
   dataHora: string;
+  /** conteúdo da embalagem, para o preço por kg/L */
+  conteudo?: number;
+  unidade?: string;
 };
 
 export type ItemComparavel = {

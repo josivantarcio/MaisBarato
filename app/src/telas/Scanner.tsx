@@ -18,7 +18,14 @@ import { ProdutoPainel } from '../components/ProdutoPainel';
 import { RegistrarPreco } from '../components/RegistrarPreco';
 import { adicionarNaListaAtual } from '../data/lista';
 import { ErroNfce, importarNfce, ItemNota, NotaImportada, pareceQrNfce, vincularItemNota } from '../data/nfce';
-import { buscarProduto, historicoPrecos, registrarPreco, salvarProduto } from '../data/repo';
+import {
+  Alternativa,
+  alternativasPorUnidade,
+  buscarProduto,
+  historicoPrecos,
+  registrarPreco,
+  salvarProduto,
+} from '../data/repo';
 import { supabase } from '../lib/supabase';
 import { cores } from '../tema';
 import { Preco, Produto } from '../types';
@@ -27,7 +34,11 @@ type Leitura = {
   ean: string;
   produto?: Produto;
   historico: Preco[];
+  alternativas: Alternativa[];
 };
+
+/** A dica de outro tamanho é um extra: se falhar, o produto abre do mesmo jeito. */
+const buscarAlternativas = (ean: string) => alternativasPorUnidade(ean).catch(() => []);
 
 const mensagemDeErro = (e: unknown) =>
   e instanceof Error && /network|fetch/i.test(e.message)
@@ -58,8 +69,12 @@ export function Scanner({ nomeUsuario, usuarioId }: { nomeUsuario: string; usuar
     setRegistrando(false);
     setErro(undefined);
     try {
-      const [produto, historico] = await Promise.all([buscarProduto(ean), historicoPrecos(ean)]);
-      setLeitura({ ean, produto, historico });
+      const [produto, historico, alternativas] = await Promise.all([
+        buscarProduto(ean),
+        historicoPrecos(ean),
+        buscarAlternativas(ean),
+      ]);
+      setLeitura({ ean, produto, historico, alternativas });
     } catch (e) {
       setErro(mensagemDeErro(e));
       travado.current = false;
@@ -144,6 +159,13 @@ export function Scanner({ nomeUsuario, usuarioId }: { nomeUsuario: string; usuar
     travado.current = false;
   }
 
+  /** Toque na dica de outro tamanho: troca o produto aberto. */
+  function abrirOutroProduto(ean: string) {
+    setNaLista(undefined);
+    travado.current = false;
+    abrirProduto(ean);
+  }
+
   function escanearOutro() {
     setLeitura(undefined);
     setRegistrando(false);
@@ -182,6 +204,10 @@ export function Scanner({ nomeUsuario, usuarioId }: { nomeUsuario: string; usuar
     const depois = cadastro?.depois;
     setLeitura({ ...leitura, produto });
     setCadastro(undefined);
+    // o conteúdo pode ter mudado: atualiza a dica de outro tamanho
+    buscarAlternativas(leitura.ean).then((alternativas) =>
+      setLeitura((atual) => (atual?.ean === leitura.ean ? { ...atual, alternativas } : atual)),
+    );
     if (depois === 'preco') setRegistrando(true);
     if (depois === 'lista') colocarNaLista(produto);
   }
@@ -197,7 +223,11 @@ export function Scanner({ nomeUsuario, usuarioId }: { nomeUsuario: string; usuar
         produto = await salvarProduto({ ean: leitura.ean, descricao: produto.descricao, imagemUrl: produto.imagemUrl });
       }
       await registrarPreco(leitura.ean, dados.lojaId, dados.valor);
-      setLeitura({ ean: leitura.ean, produto, historico: await historicoPrecos(leitura.ean) });
+      const [historico, alternativas] = await Promise.all([
+        historicoPrecos(leitura.ean),
+        buscarAlternativas(leitura.ean),
+      ]);
+      setLeitura({ ean: leitura.ean, produto, historico, alternativas });
       setRegistrando(false);
     } catch (e) {
       setErro(mensagemDeErro(e));
@@ -284,6 +314,8 @@ export function Scanner({ nomeUsuario, usuarioId }: { nomeUsuario: string; usuar
                 ean={leitura.ean}
                 produto={leitura.produto}
                 historico={leitura.historico}
+                alternativas={leitura.alternativas}
+                onAbrirProduto={abrirOutroProduto}
                 onCadastrar={!leitura.produto ? () => setCadastro({ modo: 'novo' }) : undefined}
                 onEditar={
                   leitura.produto?.salvo && leitura.produto.criadoPor === usuarioId

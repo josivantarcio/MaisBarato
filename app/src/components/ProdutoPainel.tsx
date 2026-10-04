@@ -1,6 +1,7 @@
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { maisBarato } from '../data/repo';
+import { Alternativa, maisBarato } from '../data/repo';
 import { brl, dataHora, ehAntigo, haQuantoTempo } from '../format';
+import { compensa, formatarPrecoUnitario, mostrarPorUnidade, precoUnitario } from '../lib/precoUnitario';
 import { cores } from '../tema';
 import { Preco, Produto } from '../types';
 
@@ -12,80 +13,119 @@ type Props = {
   onCadastrar?: () => void;
   /** quem cadastrou pode editar */
   onEditar?: () => void;
+  /** embalagens parecidas de outros tamanhos (preço por kg/L) */
+  alternativas?: Alternativa[];
+  onAbrirProduto?: (ean: string) => void;
 };
 
-export function ProdutoPainel({ ean, produto, historico, onCadastrar, onEditar }: Props) {
+export function ProdutoPainel({
+  ean,
+  produto,
+  historico,
+  onCadastrar,
+  onEditar,
+  alternativas = [],
+  onAbrirProduto,
+}: Props) {
   const melhor = maisBarato(historico);
+  const porUnidade = melhor ? precoUnitario(melhor.valor, produto?.conteudo, produto?.unidade) : undefined;
+  // a lista vem ordenada por preço por unidade: a primeira de outro código é a melhor alternativa
+  const outra = alternativas.find((a) => a.ean !== ean);
+  const dica = outra && compensa(outra.precoUnitario, porUnidade) ? outra : undefined;
 
   return (
-    <View style={styles.linha}>
-      {/* Coluna esquerda: imagem, descrição e o mais barato */}
-      <View style={styles.colunaProduto}>
-        {produto?.imagemUrl ? (
-          <Image source={{ uri: produto.imagemUrl }} style={styles.imagem} resizeMode="contain" />
-        ) : (
-          <View style={[styles.imagem, styles.semImagem]}>
-            <Text style={styles.semImagemTexto}>sem foto</Text>
-          </View>
-        )}
-        <Text style={styles.descricao} numberOfLines={3}>
-          {produto?.descricao ?? 'Produto não cadastrado'}
-        </Text>
-        <Text style={styles.ean}>{ean}</Text>
-        {onCadastrar && (
-          <Pressable style={styles.cadastrar} onPress={onCadastrar}>
-            <Text style={styles.cadastrarTexto}>Cadastrar produto</Text>
-          </Pressable>
-        )}
-        {onEditar && (
-          <Pressable onPress={onEditar} hitSlop={6}>
-            <Text style={styles.editar}>Editar produto</Text>
-          </Pressable>
-        )}
+    <View style={styles.painel}>
+      <View style={styles.linha}>
+        {/* Coluna esquerda: imagem, descrição e o mais barato */}
+        <View style={styles.colunaProduto}>
+          {produto?.imagemUrl ? (
+            <Image source={{ uri: produto.imagemUrl }} style={styles.imagem} resizeMode="contain" />
+          ) : (
+            <View style={[styles.imagem, styles.semImagem]}>
+              <Text style={styles.semImagemTexto}>sem foto</Text>
+            </View>
+          )}
+          <Text style={styles.descricao} numberOfLines={3}>
+            {produto?.descricao ?? 'Produto não cadastrado'}
+          </Text>
+          <Text style={styles.ean}>{ean}</Text>
+          {onCadastrar && (
+            <Pressable style={styles.cadastrar} onPress={onCadastrar}>
+              <Text style={styles.cadastrarTexto}>Cadastrar produto</Text>
+            </Pressable>
+          )}
+          {onEditar && (
+            <Pressable onPress={onEditar} hitSlop={6}>
+              <Text style={styles.editar}>Editar produto</Text>
+            </Pressable>
+          )}
 
-        {melhor ? (
-          <View style={styles.destaque}>
-            <Text style={styles.destaqueRotulo}>MAIS BARATO</Text>
-            <Text style={styles.destaquePreco}>{brl(melhor.valor)}</Text>
-            <Text style={styles.destaqueLoja} numberOfLines={2}>
-              {melhor.lojaNome}
-            </Text>
-            <Text style={styles.destaqueTempo}>{haQuantoTempo(melhor.dataHora)}</Text>
-          </View>
-        ) : (
-          <Text style={styles.vazio}>Nenhum preço ainda. Seja o primeiro!</Text>
-        )}
-      </View>
+          {melhor ? (
+            <View style={styles.destaque}>
+              <Text style={styles.destaqueRotulo}>MAIS BARATO</Text>
+              <Text style={styles.destaquePreco}>{brl(melhor.valor)}</Text>
+              {porUnidade && mostrarPorUnidade(produto?.conteudo, produto?.unidade) && (
+                <Text style={styles.destaqueUnidade}>{formatarPrecoUnitario(porUnidade)}</Text>
+              )}
+              <Text style={styles.destaqueLoja} numberOfLines={2}>
+                {melhor.lojaNome}
+              </Text>
+              <Text style={styles.destaqueTempo}>{haQuantoTempo(melhor.dataHora)}</Text>
+            </View>
+          ) : (
+            <Text style={styles.vazio}>Nenhum preço ainda. Seja o primeiro!</Text>
+          )}
+        </View>
 
-      {/* Coluna direita: histórico local | preço | data e hora */}
-      <View style={styles.colunaHistorico}>
-        <Text style={styles.titulo}>Histórico</Text>
-        <ScrollView>
-          {historico.map((p) => {
-            const ehMelhor = p.id === melhor?.id;
-            const antigo = ehAntigo(p.dataHora);
-            return (
-              <View key={p.id} style={[styles.item, ehMelhor && styles.itemMelhor, antigo && styles.itemAntigo]}>
-                <View style={styles.itemTopo}>
-                  <Text style={styles.itemLoja} numberOfLines={1}>
-                    {p.lojaNome}
+        {/* Coluna direita: histórico local | preço | data e hora */}
+        <View style={styles.colunaHistorico}>
+          <Text style={styles.titulo}>Histórico</Text>
+          <ScrollView>
+            {historico.map((p) => {
+              const ehMelhor = p.id === melhor?.id;
+              const antigo = ehAntigo(p.dataHora);
+              return (
+                <View key={p.id} style={[styles.item, ehMelhor && styles.itemMelhor, antigo && styles.itemAntigo]}>
+                  <View style={styles.itemTopo}>
+                    <Text style={styles.itemLoja} numberOfLines={1}>
+                      {p.lojaNome}
+                    </Text>
+                    <Text style={[styles.itemPreco, ehMelhor && styles.itemPrecoMelhor]}>{brl(p.valor)}</Text>
+                  </View>
+                  <Text style={styles.itemData}>
+                    {dataHora(p.dataHora)}
+                    {p.origem === 'nfce' ? '  · cupom fiscal' : ''}
                   </Text>
-                  <Text style={[styles.itemPreco, ehMelhor && styles.itemPrecoMelhor]}>{brl(p.valor)}</Text>
                 </View>
-                <Text style={styles.itemData}>
-                  {dataHora(p.dataHora)}
-                  {p.origem === 'nfce' ? '  · cupom fiscal' : ''}
-                </Text>
-              </View>
-            );
-          })}
-        </ScrollView>
+              );
+            })}
+          </ScrollView>
+        </View>
       </View>
+
+      {dica && (
+        <Pressable
+          style={styles.dica}
+          onPress={onAbrirProduto ? () => onAbrirProduto(dica.ean) : undefined}
+          accessibilityRole="button"
+          accessibilityHint="Abre este produto"
+        >
+          <Text style={styles.dicaTitulo}>
+            💡 {porUnidade ? `Mais barato por ${dica.precoUnitario.base}` : 'Preço de outro tamanho'}:{' '}
+            {formatarPrecoUnitario(dica.precoUnitario)}
+          </Text>
+          <Text style={styles.dicaTexto} numberOfLines={2}>
+            {dica.descricao} · {brl(dica.valor)} · {dica.lojaNome}
+            {porUnidade ? ` (aqui: ${formatarPrecoUnitario(porUnidade)})` : ''}
+          </Text>
+        </Pressable>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  painel: { flex: 1, gap: 8 },
   linha: { flexDirection: 'row', gap: 12, flex: 1 },
   colunaProduto: { width: '42%' },
   colunaHistorico: { flex: 1 },
@@ -105,6 +145,7 @@ const styles = StyleSheet.create({
   },
   destaqueRotulo: { color: '#fff', fontSize: 10, fontWeight: '800', letterSpacing: 1 },
   destaquePreco: { color: '#fff', fontSize: 22, fontWeight: '800' },
+  destaqueUnidade: { color: '#fff', fontSize: 12, fontWeight: '700', marginTop: -2 },
   destaqueLoja: { color: '#fff', fontSize: 12, fontWeight: '600' },
   destaqueTempo: { color: '#e6ffe9', fontSize: 11 },
   vazio: { marginTop: 8, color: cores.cinza, fontSize: 13 },
@@ -123,4 +164,7 @@ const styles = StyleSheet.create({
   itemPreco: { fontSize: 13, fontWeight: '700', color: cores.texto },
   itemPrecoMelhor: { color: cores.verde },
   itemData: { fontSize: 11, color: cores.cinza },
+  dica: { backgroundColor: '#fff8e1', borderRadius: 10, padding: 8, borderWidth: 1, borderColor: '#ffe082' },
+  dicaTitulo: { fontSize: 13, fontWeight: '700', color: cores.texto },
+  dicaTexto: { fontSize: 12, color: cores.texto, marginTop: 2 },
 });
