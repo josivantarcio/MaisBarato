@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { CadastroProduto } from '../components/CadastroProduto';
 import { NotaPainel } from '../components/NotaPainel';
 import { ProdutoPainel } from '../components/ProdutoPainel';
 import { RegistrarPreco } from '../components/RegistrarPreco';
@@ -33,7 +34,7 @@ const mensagemDeErro = (e: unknown) =>
     ? 'Sem conexão com o servidor. Tente de novo.'
     : 'Algo deu errado. Tente de novo.';
 
-export function Scanner({ nomeUsuario }: { nomeUsuario: string }) {
+export function Scanner({ nomeUsuario, usuarioId }: { nomeUsuario: string; usuarioId: string }) {
   const [permissao, pedirPermissao] = useCameraPermissions();
   const [leitura, setLeitura] = useState<Leitura>();
   const [carregando, setCarregando] = useState(false);
@@ -45,6 +46,8 @@ export function Scanner({ nomeUsuario }: { nomeUsuario: string }) {
   const [nota, setNota] = useState<NotaImportada>();
   const [vinculando, setVinculando] = useState<ItemNota>();
   const [mensagemCarregando, setMensagemCarregando] = useState<string>();
+  // Formulário de produto aberto; "depois" = o que o usuário queria fazer antes de cadastrar
+  const [cadastro, setCadastro] = useState<{ modo: 'novo' | 'editar'; depois?: 'preco' | 'lista' }>();
   // Evita processar o mesmo código várias vezes enquanto a câmera continua vendo.
   const travado = useRef(false);
 
@@ -146,22 +149,24 @@ export function Scanner({ nomeUsuario }: { nomeUsuario: string }) {
     setRegistrando(false);
     setErro(undefined);
     setNaLista(undefined);
+    setCadastro(undefined);
     travado.current = false;
   }
 
-  async function colocarNaLista() {
+  async function colocarNaLista(produtoAtual = leitura?.produto) {
     if (!leitura) return;
+    // Produto desconhecido: primeiro o cadastro, depois a lista
+    if (!produtoAtual) {
+      setCadastro({ modo: 'novo', depois: 'lista' });
+      return;
+    }
     setNaLista('adicionando');
     setErro(undefined);
     try {
       // O item da lista aponta para o produto; garante que ele exista no banco.
-      let produto = leitura.produto;
-      if (!produto?.salvo) {
-        produto = await salvarProduto({
-          ean: leitura.ean,
-          descricao: produto?.descricao ?? `Produto ${leitura.ean}`,
-          imagemUrl: produto?.imagemUrl,
-        });
+      let produto = produtoAtual;
+      if (!produto.salvo) {
+        produto = await salvarProduto({ ean: leitura.ean, descricao: produto.descricao, imagemUrl: produto.imagemUrl });
         setLeitura({ ...leitura, produto });
       }
       await adicionarNaListaAtual({ ean: leitura.ean, descricao: produto.descricao });
@@ -172,18 +177,24 @@ export function Scanner({ nomeUsuario }: { nomeUsuario: string }) {
     }
   }
 
-  async function salvarPreco(dados: { lojaId: string; valor: number; descricao?: string }) {
+  function produtoSalvo(produto: Produto) {
     if (!leitura) return;
+    const depois = cadastro?.depois;
+    setLeitura({ ...leitura, produto });
+    setCadastro(undefined);
+    if (depois === 'preco') setRegistrando(true);
+    if (depois === 'lista') colocarNaLista(produto);
+  }
+
+  async function salvarPreco(dados: { lojaId: string; valor: number }) {
+    if (!leitura?.produto) return;
     setSalvando(true);
     setErro(undefined);
     try {
       let produto = leitura.produto;
-      if (!produto?.salvo) {
-        produto = await salvarProduto({
-          ean: leitura.ean,
-          descricao: produto?.descricao ?? dados.descricao ?? `Produto ${leitura.ean}`,
-          imagemUrl: produto?.imagemUrl,
-        });
+      if (!produto.salvo) {
+        // veio do Open Food Facts: entra no banco junto com o primeiro preço
+        produto = await salvarProduto({ ean: leitura.ean, descricao: produto.descricao, imagemUrl: produto.imagemUrl });
       }
       await registrarPreco(leitura.ean, dados.lojaId, dados.valor);
       setLeitura({ ean: leitura.ean, produto, historico: await historicoPrecos(leitura.ean) });
@@ -212,7 +223,7 @@ export function Scanner({ nomeUsuario }: { nomeUsuario: string }) {
   return (
     <SafeAreaView style={styles.tela} edges={['top']}>
       <StatusBar style="light" />
-      <View style={[styles.cameraArea, (registrando || (nota && !vinculando)) && styles.cameraCompacta]}>
+      <View style={[styles.cameraArea, (registrando || !!cadastro || (nota && !vinculando)) && styles.cameraCompacta]}>
         <CameraView
           style={StyleSheet.absoluteFill}
           facing="back"
@@ -253,16 +264,33 @@ export function Scanner({ nomeUsuario }: { nomeUsuario: string }) {
         ) : nota ? (
           <NotaPainel nota={nota} onVincular={setVinculando} onFechar={fecharNota} />
         ) : leitura ? (
-          registrando ? (
+          cadastro ? (
+            <CadastroProduto
+              ean={leitura.ean}
+              inicial={leitura.produto}
+              modo={cadastro.modo}
+              onSalvo={produtoSalvo}
+              onCancelar={() => setCadastro(undefined)}
+            />
+          ) : registrando ? (
             <RegistrarPreco
-              pedirDescricao={!leitura.produto}
               salvando={salvando}
               onSalvar={salvarPreco}
               onCancelar={() => setRegistrando(false)}
             />
           ) : (
             <>
-              <ProdutoPainel ean={leitura.ean} produto={leitura.produto} historico={leitura.historico} />
+              <ProdutoPainel
+                ean={leitura.ean}
+                produto={leitura.produto}
+                historico={leitura.historico}
+                onCadastrar={!leitura.produto ? () => setCadastro({ modo: 'novo' }) : undefined}
+                onEditar={
+                  leitura.produto?.salvo && leitura.produto.criadoPor === usuarioId
+                    ? () => setCadastro({ modo: 'editar' })
+                    : undefined
+                }
+              />
               <View style={styles.acoes}>
                 <Pressable style={[styles.botao, styles.botaoSecundario]} onPress={escanearOutro}>
                   <Text style={styles.botaoSecundarioTexto}>Outro</Text>
@@ -270,7 +298,7 @@ export function Scanner({ nomeUsuario }: { nomeUsuario: string }) {
                 <Pressable
                   style={[styles.botao, styles.botaoSecundario]}
                   disabled={!!naLista}
-                  onPress={colocarNaLista}
+                  onPress={() => colocarNaLista()}
                 >
                   {naLista === 'adicionando' ? (
                     <ActivityIndicator color={cores.verde} />
@@ -278,7 +306,10 @@ export function Scanner({ nomeUsuario }: { nomeUsuario: string }) {
                     <Text style={styles.botaoSecundarioTexto}>{naLista === 'ok' ? '✓ Na lista' : '+ Lista'}</Text>
                   )}
                 </Pressable>
-                <Pressable style={[styles.botao, { flex: 1 }]} onPress={() => setRegistrando(true)}>
+                <Pressable
+                  style={[styles.botao, { flex: 1 }]}
+                  onPress={() => (leitura.produto ? setRegistrando(true) : setCadastro({ modo: 'novo', depois: 'preco' }))}
+                >
                   <Text style={styles.botaoTexto}>+ Preço</Text>
                 </Pressable>
               </View>

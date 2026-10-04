@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { Coordenadas } from '../lib/geo';
-import { Loja, NovaLoja, OrigemPreco, Preco, Produto } from '../types';
+import { formatarConteudo } from '../format';
+import { DadosProduto, Loja, NovaLoja, OrigemPreco, Preco, Produto, UnidadeConteudo } from '../types';
 
 // Camada de acesso a dados: Supabase + Open Food Facts como fonte extra de produtos.
 
@@ -80,15 +81,84 @@ async function buscarOpenFoodFacts(ean: string): Promise<Produto | undefined> {
   }
 }
 
+const COLUNAS_PRODUTO = 'ean, descricao, nome, marca, conteudo, unidade, imagem_url, criado_por';
+
+type LinhaProduto = {
+  ean: string;
+  descricao: string;
+  nome: string | null;
+  marca: string | null;
+  conteudo: number | null;
+  unidade: string | null;
+  imagem_url: string | null;
+  criado_por: string | null;
+};
+
+function produtoDaLinha(l: LinhaProduto): Produto {
+  return {
+    ean: l.ean,
+    descricao: l.descricao,
+    nome: l.nome ?? undefined,
+    marca: l.marca ?? undefined,
+    conteudo: l.conteudo !== null ? Number(l.conteudo) : undefined,
+    unidade: (l.unidade as UnidadeConteudo | null) ?? undefined,
+    imagemUrl: l.imagem_url ?? undefined,
+    criadoPor: l.criado_por ?? undefined,
+    salvo: true,
+  };
+}
+
 export async function buscarProduto(ean: string): Promise<Produto | undefined> {
+  const { data, error } = await supabase.from('produtos').select(COLUNAS_PRODUTO).eq('ean', ean).maybeSingle();
+  if (error) throw error;
+  if (data) return produtoDaLinha(data);
+  return buscarOpenFoodFacts(ean);
+}
+
+/** "Feijão Carioca Kicaldo 1 kg" */
+export function montarDescricao(d: Pick<DadosProduto, 'nome' | 'marca' | 'conteudo' | 'unidade'>): string {
+  const tamanho = d.conteudo && d.unidade ? formatarConteudo(d.conteudo, d.unidade) : '';
+  return [d.nome.trim(), d.marca?.trim(), tamanho].filter(Boolean).join(' ').slice(0, 200);
+}
+
+/** Cadastra um produto novo com os campos do formulário. */
+export async function cadastrarProdutoCompleto(d: DadosProduto): Promise<Produto> {
   const { data, error } = await supabase
     .from('produtos')
-    .select('ean, descricao, imagem_url')
-    .eq('ean', ean)
+    .insert({
+      ean: d.ean,
+      descricao: montarDescricao(d),
+      nome: d.nome.trim(),
+      marca: d.marca?.trim() || null,
+      conteudo: d.conteudo ?? null,
+      unidade: d.unidade ?? null,
+      imagem_url: d.imagemUrl ?? null,
+    })
+    .select(COLUNAS_PRODUTO)
+    .single();
+  if (error) throw error;
+  return produtoDaLinha(data);
+}
+
+/** Edita um produto (o banco só permite a quem cadastrou). */
+export async function editarProduto(d: DadosProduto): Promise<Produto> {
+  const { data, error } = await supabase
+    .from('produtos')
+    .update({
+      descricao: montarDescricao(d),
+      nome: d.nome.trim(),
+      marca: d.marca?.trim() || null,
+      conteudo: d.conteudo ?? null,
+      unidade: d.unidade ?? null,
+      imagem_url: d.imagemUrl ?? null,
+      atualizado_em: new Date().toISOString(),
+    })
+    .eq('ean', d.ean)
+    .select(COLUNAS_PRODUTO)
     .maybeSingle();
   if (error) throw error;
-  if (data) return { ean: data.ean, descricao: data.descricao, imagemUrl: data.imagem_url ?? undefined, salvo: true };
-  return buscarOpenFoodFacts(ean);
+  if (!data) throw new Error('Sem permissão para editar este produto');
+  return produtoDaLinha(data);
 }
 
 /** Garante que o produto existe no banco antes de registrar um preço para ele. */
@@ -100,7 +170,8 @@ export async function salvarProduto(produto: Omit<Produto, 'salvo'>): Promise<Pr
       { onConflict: 'ean', ignoreDuplicates: true },
     );
   if (error) throw error;
-  return { ...produto, salvo: true };
+  // Lê de volta: se já existia, vale o que está no banco
+  return (await buscarProduto(produto.ean)) ?? { ...produto, salvo: true };
 }
 
 /** Histórico do produto, do mais recente para o mais antigo. */

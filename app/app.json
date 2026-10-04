@@ -37,6 +37,13 @@
           "locationWhenInUsePermission": "O MaisBarato usa sua localização para mostrar os mercados perto de você e saber em qual loja você está registrando o preço.",
           "isAndroidBackgroundLocationEnabled": false
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "O MaisBarato usa a câmera para fotografar produtos que ainda não têm foto.",
+          "photosPermission": false
+        }
       ]
     ]
   }

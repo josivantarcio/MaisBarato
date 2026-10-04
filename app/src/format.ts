@@ -46,3 +46,9 @@ export function dataCurta(iso: string): string {
   const d = new Date(iso);
   return `${dois(d.getDate())}/${dois(d.getMonth() + 1)}`;
 }
+
+/** 500 g, 1 kg, 1,5 L, 350 ml, 12 un */
+export function formatarConteudo(conteudo: number, unidade: string): string {
+  const numero = String(Number(conteudo.toFixed(3))).replace('.', ',');
+  return `${numero} ${unidade === 'l' ? 'L' : unidade}`;
+}

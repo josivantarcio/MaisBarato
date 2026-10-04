@@ -1,4 +1,4 @@
-import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { maisBarato } from '../data/repo';
 import { brl, dataHora, ehAntigo, haQuantoTempo } from '../format';
 import { cores } from '../tema';
@@ -8,9 +8,13 @@ type Props = {
   ean: string;
   produto?: Produto;
   historico: Preco[];
+  /** produto desconhecido: mostra o botão de cadastrar */
+  onCadastrar?: () => void;
+  /** quem cadastrou pode editar */
+  onEditar?: () => void;
 };
 
-export function ProdutoPainel({ ean, produto, historico }: Props) {
+export function ProdutoPainel({ ean, produto, historico, onCadastrar, onEditar }: Props) {
   const melhor = maisBarato(historico);
 
   return (
@@ -28,6 +32,16 @@ export function ProdutoPainel({ ean, produto, historico }: Props) {
           {produto?.descricao ?? 'Produto não cadastrado'}
         </Text>
         <Text style={styles.ean}>{ean}</Text>
+        {onCadastrar && (
+          <Pressable style={styles.cadastrar} onPress={onCadastrar}>
+            <Text style={styles.cadastrarTexto}>Cadastrar produto</Text>
+          </Pressable>
+        )}
+        {onEditar && (
+          <Pressable onPress={onEditar} hitSlop={6}>
+            <Text style={styles.editar}>Editar produto</Text>
+          </Pressable>
+        )}
 
         {melhor ? (
           <View style={styles.destaque}>
@@ -80,6 +94,9 @@ const styles = StyleSheet.create({
   semImagemTexto: { color: cores.cinza, fontSize: 12 },
   descricao: { fontSize: 14, fontWeight: '600', color: cores.texto, marginTop: 6 },
   ean: { fontSize: 11, color: cores.cinza, marginTop: 2 },
+  cadastrar: { backgroundColor: cores.verde, borderRadius: 8, paddingVertical: 7, alignItems: 'center', marginTop: 6 },
+  cadastrarTexto: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  editar: { color: cores.verde, fontWeight: '700', fontSize: 12, marginTop: 4 },
   destaque: {
     marginTop: 8,
     padding: 8,

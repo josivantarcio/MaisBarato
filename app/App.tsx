@@ -35,7 +35,7 @@ export default function App() {
         <View style={{ flex: 1 }}>
           {/* Só uma aba montada por vez: a câmera fica desligada enquanto a lista está aberta. */}
           {aba === 'scanner' ? (
-            <Scanner nomeUsuario={nome} />
+            <Scanner nomeUsuario={nome} usuarioId={sessao.user.id} />
           ) : (
             <SafeAreaView style={{ flex: 1, backgroundColor: cores.fundo }} edges={['top']}>
               <Lista />

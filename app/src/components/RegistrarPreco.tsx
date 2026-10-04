@@ -12,15 +12,14 @@ import { CadastrarLoja } from './CadastrarLoja';
 const RAIO_NA_LOJA_M = 150;
 
 type Props = {
-  pedirDescricao: boolean;
   salvando: boolean;
-  onSalvar: (dados: { lojaId: string; valor: number; descricao?: string }) => void;
+  onSalvar: (dados: { lojaId: string; valor: number }) => void;
   onCancelar: () => void;
 };
 
 type EstadoGps = 'buscando' | 'ok' | 'negado' | 'indisponivel';
 
-export function RegistrarPreco({ pedirDescricao, salvando, onSalvar, onCancelar }: Props) {
+export function RegistrarPreco({ salvando, onSalvar, onCancelar }: Props) {
   const [gps, setGps] = useState<EstadoGps>('buscando');
   const [posicao, setPosicao] = useState<Posicao>();
   const [lojas, setLojas] = useState<Loja[]>();
@@ -28,10 +27,9 @@ export function RegistrarPreco({ pedirDescricao, salvando, onSalvar, onCancelar 
   const [lojaId, setLojaId] = useState<string>();
   const [cadastrandoLoja, setCadastrandoLoja] = useState(false);
   const [valorTexto, setValorTexto] = useState('');
-  const [descricao, setDescricao] = useState('');
 
   const valor = lerValor(valorTexto);
-  const podeSalvar = !!lojaId && !!valor && (!pedirDescricao || descricao.trim().length > 2) && !salvando;
+  const podeSalvar = !!lojaId && !!valor && !salvando;
 
   useEffect(() => {
     let ativo = true;
@@ -80,15 +78,6 @@ export function RegistrarPreco({ pedirDescricao, salvando, onSalvar, onCancelar 
     <View style={styles.raiz}>
       <Text style={styles.titulo}>Registrar preço</Text>
 
-      {pedirDescricao && (
-        <TextInput
-          style={styles.input}
-          placeholder="Descrição (ex.: Feijão Carioca 1kg)"
-          value={descricao}
-          onChangeText={setDescricao}
-        />
-      )}
-
       <View style={styles.linha}>
         <TextInput
           style={[styles.input, styles.valor]}
@@ -102,7 +91,7 @@ export function RegistrarPreco({ pedirDescricao, salvando, onSalvar, onCancelar 
         </Pressable>
         <Pressable
           disabled={!podeSalvar}
-          onPress={() => lojaId && valor && onSalvar({ lojaId, valor, descricao: descricao.trim() || undefined })}
+          onPress={() => lojaId && valor && onSalvar({ lojaId, valor })}
           style={[styles.botao, !podeSalvar && styles.botaoDesativado]}
         >
           {salvando ? <ActivityIndicator color="#fff" /> : <Text style={styles.botaoTexto}>Salvar</Text>}
