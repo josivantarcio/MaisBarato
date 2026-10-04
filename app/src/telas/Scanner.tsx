@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ProdutoPainel } from '../components/ProdutoPainel';
 import { RegistrarPreco } from '../components/RegistrarPreco';
+import { adicionarNaMinhaLista } from '../data/lista';
 import { buscarProduto, historicoPrecos, registrarPreco, salvarProduto } from '../data/repo';
 import { supabase } from '../lib/supabase';
 import { cores } from '../tema';
@@ -38,6 +39,7 @@ export function Scanner({ nomeUsuario }: { nomeUsuario: string }) {
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string>();
   const [digitado, setDigitado] = useState('');
+  const [naLista, setNaLista] = useState<'adicionando' | 'ok'>();
   // Evita processar o mesmo código várias vezes enquanto a câmera continua vendo.
   const travado = useRef(false);
 
@@ -66,7 +68,31 @@ export function Scanner({ nomeUsuario }: { nomeUsuario: string }) {
     setLeitura(undefined);
     setRegistrando(false);
     setErro(undefined);
+    setNaLista(undefined);
     travado.current = false;
+  }
+
+  async function colocarNaLista() {
+    if (!leitura) return;
+    setNaLista('adicionando');
+    setErro(undefined);
+    try {
+      // O item da lista aponta para o produto; garante que ele exista no banco.
+      let produto = leitura.produto;
+      if (!produto?.salvo) {
+        produto = await salvarProduto({
+          ean: leitura.ean,
+          descricao: produto?.descricao ?? `Produto ${leitura.ean}`,
+          imagemUrl: produto?.imagemUrl,
+        });
+        setLeitura({ ...leitura, produto });
+      }
+      await adicionarNaMinhaLista({ ean: leitura.ean, descricao: produto.descricao });
+      setNaLista('ok');
+    } catch (e) {
+      setErro(mensagemDeErro(e));
+      setNaLista(undefined);
+    }
   }
 
   async function salvarPreco(dados: { lojaId: string; valor: number; descricao?: string }) {
@@ -107,7 +133,7 @@ export function Scanner({ nomeUsuario }: { nomeUsuario: string }) {
   }
 
   return (
-    <SafeAreaView style={styles.tela} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.tela} edges={['top']}>
       <StatusBar style="light" />
       <View style={[styles.cameraArea, registrando && styles.cameraCompacta]}>
         <CameraView
@@ -144,10 +170,21 @@ export function Scanner({ nomeUsuario }: { nomeUsuario: string }) {
               <ProdutoPainel ean={leitura.ean} produto={leitura.produto} historico={leitura.historico} />
               <View style={styles.acoes}>
                 <Pressable style={[styles.botao, styles.botaoSecundario]} onPress={escanearOutro}>
-                  <Text style={styles.botaoSecundarioTexto}>Escanear outro</Text>
+                  <Text style={styles.botaoSecundarioTexto}>Outro</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.botao, styles.botaoSecundario]}
+                  disabled={!!naLista}
+                  onPress={colocarNaLista}
+                >
+                  {naLista === 'adicionando' ? (
+                    <ActivityIndicator color={cores.verde} />
+                  ) : (
+                    <Text style={styles.botaoSecundarioTexto}>{naLista === 'ok' ? '✓ Na lista' : '+ Lista'}</Text>
+                  )}
                 </Pressable>
                 <Pressable style={[styles.botao, { flex: 1 }]} onPress={() => setRegistrando(true)}>
-                  <Text style={styles.botaoTexto}>+ Registrar preço</Text>
+                  <Text style={styles.botaoTexto}>+ Preço</Text>
                 </Pressable>
               </View>
             </>

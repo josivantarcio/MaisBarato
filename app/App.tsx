@@ -1,15 +1,18 @@
 import type { Session } from '@supabase/supabase-js';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { Aba, BarraAbas } from './src/components/BarraAbas';
 import { supabase } from './src/lib/supabase';
 import { cores } from './src/tema';
+import { Lista } from './src/telas/Lista';
 import { Login } from './src/telas/Login';
 import { Scanner } from './src/telas/Scanner';
 
 export default function App() {
   // undefined = ainda verificando se existe sessão salva no aparelho
   const [sessao, setSessao] = useState<Session | null>();
+  const [aba, setAba] = useState<Aba>('scanner');
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSessao(data.session));
@@ -29,7 +32,17 @@ export default function App() {
           <ActivityIndicator size="large" color={cores.verde} />
         </View>
       ) : sessao ? (
-        <Scanner nomeUsuario={nome} />
+        <View style={{ flex: 1 }}>
+          {/* Só uma aba montada por vez: a câmera fica desligada enquanto a lista está aberta. */}
+          {aba === 'scanner' ? (
+            <Scanner nomeUsuario={nome} />
+          ) : (
+            <SafeAreaView style={{ flex: 1, backgroundColor: cores.fundo }} edges={['top']}>
+              <Lista />
+            </SafeAreaView>
+          )}
+          <BarraAbas ativa={aba} onTrocar={setAba} />
+        </View>
       ) : (
         <Login />
       )}
